@@ -50,8 +50,8 @@ code. Technical details: `.claude/rules/wandb-monitoring.md`; tracking package: 
 
 - One AMD GPU (ROCm, `HIP_VISIBLE_DEVICES`), **20 GB VRAM**, conda env **`DeCLIP_CATSeg`**
   (torch 2.10 + ROCm 7.0, detectron2 0.6, wandb). No xformers (`xattn` is off in the EVA configs).
-- The paper trains with 4 images per batch on 4 GPUs; here `SOLVER.IMS_PER_BATCH 1`. BASE_LR 2e-4
-  and MAX_ITER 80000 are still the paper's — whether to scale them is an open decision (rule 4).
+- The paper trains with 4 images per batch on 4 GPUs; here `SOLVER.IMS_PER_BATCH 1`, so `BASE_LR` is
+  square-root-scaled to 1e-4 (decided 2026-11-20). MAX_ITER 80000 is still the paper's (open, rule 4).
 - Training/launching happens on the Linux box (`/home/viktor/...`, `/mnt/win-data/...`). This Mac
   is for editing; do not try to run training here.
 - Every in-training eval (COCO-Stuff val, 5000 images) and every final benchmark costs wall time;
@@ -83,7 +83,7 @@ notes). Runs land in `/mnt/win-data/MasterDisertatie/MyRuns-OVSS/<branch>/<commi
   sliding-window inference). Our stage-1 checkpoints are qq-mode; the README says to switch both.
 - For EVA, `frozen_backbone` ignores `CLIP_FINETUNE`: it trains `q_proj`/`v_proj` of all visual
   blocks and `in_proj_weight` of the text transformer, everything else in CLIP frozen. Their LR is
-  `BASE_LR × CLIP_MULTIPLIER` (2e-4 × 0.01 = 2e-6); the swin backbone multiplier is 0.
+  `BASE_LR × CLIP_MULTIPLIER` (1e-4 × 0.01 = 1e-6; paper 2e-6); the swin backbone multiplier is 0.
 - This copy of EVA-CLIP has none of stage 1's additions (SDPA, block-8 exit = placement A,
   placement B). Porting them is a later, explicit step.
 - In-training eval: `DATASETS.TEST` = COCO-Stuff val (`coco_2017_test_stuff_all_sem_seg`) every

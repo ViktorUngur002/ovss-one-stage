@@ -6,7 +6,8 @@
 #     in configs/eva_vitl_336.yaml), dense features read in csa mode as in the upstream cat_seg_model.py.
 #   * data: train COCO-Stuff (171 classes), in-training eval on COCO-Stuff val every TEST.EVAL_PERIOD (5000 iters),
 #     the upstream defaults. The six OVSS benchmarks run after training: scripts/exp_final_eval.sh.
-#   * single GPU: SOLVER.IMS_PER_BATCH 1 (paper: 4), BASE_LR 2e-4 and MAX_ITER 80000 unchanged for now.
+#   * single GPU: SOLVER.IMS_PER_BATCH 1 (paper: 4), so SOLVER.BASE_LR 1e-4 = 2e-4 x sqrt(1/4) (Adam's square-root
+#     scaling rule); CLIP q/v lr follows at x0.01 = 1e-6. MAX_ITER 80000 unchanged for now.
 #   * output: MyRuns-OVSS/<branch>/<commit8>_<slug>/ (set by run_experiment.py); relaunching resumes from the last
 #     periodic checkpoint there. Override any config value by appending KEY VALUE pairs to this script's arguments.
 #

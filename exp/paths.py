@@ -17,7 +17,7 @@ def _flag(name, default):
 # Kept apart from clip-JEPA-fine-tune's MyRuns: CAT-Seg runs are a different stage.
 MYRUNS_ROOT = Path(os.environ.get("EXP_MYRUNS_ROOT", "/mnt/win-data/MasterDisertatie/MyRuns-OVSS"))
 
-WANDB_PROJECT = os.environ.get("WANDB_PROJECT", "ovss-catseg")
+WANDB_PROJECT = os.environ.get("WANDB_PROJECT", "OVSS One stage arch experiments")
 WANDB_ENTITY = os.environ.get("WANDB_ENTITY") or None
 
 # The governing metric for "best checkpoint": the mean of these keys out of the

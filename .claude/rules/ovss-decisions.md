@@ -17,20 +17,24 @@ closed questions or silently assume an undecided value.
   training (`scripts/exp_final_eval.sh`, `model_final.pth` as upstream `eval.sh`). Best checkpoint =
   in-training COCO-Stuff mIoU.
 - **2026-11-20** Tracking as in clip-JEPA-fine-tune: branch = wandb group, commit = run; wandb
-  project `ovss-catseg`; runs in `/mnt/win-data/MasterDisertatie/MyRuns-OVSS/`; keep the newest
+  project `OVSS One stage arch experiments`; runs in `/mnt/win-data/MasterDisertatie/MyRuns-OVSS/`; keep the newest
   periodic checkpoint + `model_best.pth` + `model_final.pth`; fp16 best weights to `gdrive:MyRuns-OVSS`.
 - **2026-11-20** Environment: the existing conda env `DeCLIP_CATSeg`; launch scripts put this repo's
   `cat_seg/src` first on `PYTHONPATH` (the env's editable `open_clip` still points at
   `/home/viktor/MasterDisertatie/DeCLIP-CATSeg`).
+- **2026-11-20** `SOLVER.BASE_LR` **1e-4** (configs/eva_vitl_336.yaml) for batch 1: the paper's 2e-4 at
+  batch 4 scaled by sqrt(1/4), the square-root rule for Adam/AdamW (Malladi et al. 2022). Rejected:
+  keeping 2e-4 (full-model clip norm 0.01 already fixes the step size, but each step is 4x noisier in
+  direction) and linear scaling to 5e-5 (stage 1's rule, derived for SGD, likely too conservative for
+  AdamW at a fixed 80k iterations). CLIP q/v lr follows at x0.01 = 1e-6.
 
 ## Undecided (do not assume a value; propose one with reasoning when we get there)
 
 | Parameter | Upstream (paper, 4 GPUs) | Here now | Notes |
 |---|---|---|---|
 | Batch | 4 | 1 (`IMS_PER_BATCH`) | 20 GB; batch 2 untested |
-| BASE_LR | 2e-4 | 2e-4 | linear/sqrt scaling to batch 1 not decided |
 | MAX_ITER | 80000 | 80000 | at batch 1 = 1/4 of the paper's images seen |
-| CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 2e-6 |
+| CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 1e-6 with BASE_LR 1e-4 |
 | EVAL_PERIOD | 5000 | 5000 | 16 COCO-Stuff evals over 80k iters |
 | Final-eval weights | model_final | model_final | model_best is the alternative |
 | Our backbones (TN e1, TW e1) and placements A/B in CAT-Seg | — | — | needs qq mode + stage-1 reading code ported |
