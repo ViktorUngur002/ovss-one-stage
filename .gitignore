@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Experiment tracking (machine-local, never committed)
+.wandb_run_map.json
+.wandb_run_map.json.corrupt
+exp/env.sh
+wandb/
+
+# detectron2 outputs and weights (runs live in MyRuns-OVSS, not here)
+output/
+*.pth
+*.pt
+
+.DS_Store
