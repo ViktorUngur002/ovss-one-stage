@@ -92,5 +92,9 @@ def add_cat_seg_config(cfg):
     cfg.MODEL.SEM_SEG_HEAD.CLIP_FINETUNE = "attention"
     cfg.MODEL.SEM_SEG_HEAD.CACHE_DIR = None
     cfg.TEST.SLIDING_WINDOW = False
-    # eval-only autocast: "" = fp32 as upstream, "fp16" or "bf16" (no TF32 on AMD, fp32 inference is slow)
+    # autocast for every evaluation (eval-only and in-training): "" = fp32 as upstream, "fp16" or "bf16"
+    # (no TF32 on AMD, fp32 inference is slow; fp16 gave the same ADE150 mIoU as fp32)
     cfg.TEST.AMP_DTYPE = ""
+    # micro-batches of IMS_PER_BATCH images whose gradients are summed before one optimizer step
+    # (1 = upstream). Needs SOLVER.AMP.ENABLED; CAT-Seg has no BatchNorm, so this equals the larger batch.
+    cfg.SOLVER.GRAD_ACCUM_STEPS = 1

@@ -8,6 +8,7 @@ import copy
 import itertools
 import logging
 import os
+import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Set
 
@@ -17,7 +18,7 @@ import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog, build_detection_train_loader
-from detectron2.engine import DefaultTrainer, default_argument_parser, default_setup, launch
+from detectron2.engine import AMPTrainer, DefaultTrainer, default_argument_parser, default_setup, launch
 from detectron2.evaluation import CityscapesInstanceEvaluator, CityscapesSemSegEvaluator, \
     COCOEvaluator, COCOPanopticEvaluator, DatasetEvaluators, SemSegEvaluator, verify_results, \
     DatasetEvaluator
@@ -92,10 +93,60 @@ except Exception:                                             # pragma: no cover
         return _Null()
 
 
+class GradAccumAMPTrainer(AMPTrainer):
+    """
+    AMPTrainer that runs `accum_steps` micro-batches (forward + scaled backward each) and then makes one
+    optimizer step, so IMS_PER_BATCH x accum_steps images form one effective batch on one GPU.
+    Each micro-batch loss is divided by accum_steps, so the summed gradient is the mean over the effective
+    batch, as a real batch would give (the CAT-Seg loss is a per-pixel mean over equal-size crops, no BatchNorm).
+    The GradScaler unscales before optimizer.step, so the full-model gradient clipping sees true gradients.
+    """
+
+    def __init__(self, model, data_loader, optimizer, accum_steps):
+        super().__init__(model, data_loader, optimizer)
+        self.accum_steps = accum_steps
+
+    def run_step(self):
+        assert self.model.training, "[GradAccumAMPTrainer] model was changed to eval mode!"
+        self.optimizer.zero_grad()
+        data_time = 0.0
+        loss_sums = {}
+        for _ in range(self.accum_steps):
+            start = time.perf_counter()
+            data = next(self._data_loader_iter)
+            data_time += time.perf_counter() - start
+            with torch.autocast("cuda", dtype=self.precision):
+                loss_dict = self.model(data)
+                losses = sum(loss_dict.values())
+            self.grad_scaler.scale(losses / self.accum_steps).backward()
+            for k, v in loss_dict.items():
+                loss_sums[k] = loss_sums.get(k, 0.0) + v.detach() / self.accum_steps
+        self.after_backward()
+        self._write_metrics(loss_sums, data_time)
+        self.grad_scaler.step(self.optimizer)
+        self.grad_scaler.update()
+
+
 class Trainer(DefaultTrainer):
     """
     Extension of the Trainer class adapted to DETR.
     """
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        accum_steps = cfg.SOLVER.GRAD_ACCUM_STEPS
+        if accum_steps > 1:
+            assert cfg.SOLVER.AMP.ENABLED, "SOLVER.GRAD_ACCUM_STEPS > 1 is implemented for AMP training only"
+            # replace the AMPTrainer DefaultTrainer built; its data loader iterator is created lazily, so nothing leaks
+            t = self._trainer
+            self._trainer = GradAccumAMPTrainer(t.model, t.data_loader, t.optimizer, accum_steps)
+
+    @classmethod
+    def test(cls, cfg, model, evaluators=None):
+        # TEST.AMP_DTYPE applies to the in-training evals as well as to --eval-only
+        amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}.get(cfg.TEST.AMP_DTYPE)
+        with torch.autocast("cuda", dtype=amp_dtype or torch.float16, enabled=amp_dtype is not None):
+            return super().test(cfg, model, evaluators)
 
     def build_hooks(self):
         hook_list = super().build_hooks()
@@ -325,9 +376,7 @@ def main(args):
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
-        amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}.get(cfg.TEST.AMP_DTYPE)
-        with torch.autocast("cuda", dtype=amp_dtype or torch.float16, enabled=amp_dtype is not None):
-            res = Trainer.test(cfg, model)
+        res = Trainer.test(cfg, model)
         if cfg.TEST.AUG.ENABLED:
             res.update(Trainer.test_with_TTA(cfg, model))
         if comm.is_main_process():

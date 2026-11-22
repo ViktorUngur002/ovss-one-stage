@@ -50,8 +50,9 @@ code. Technical details: `.claude/rules/wandb-monitoring.md`; tracking package: 
 
 - One AMD GPU (ROCm, `HIP_VISIBLE_DEVICES`), **20 GB VRAM**, conda env **`DeCLIP_CATSeg`**
   (torch 2.10 + ROCm 7.0, detectron2 0.6, wandb). No xformers (`xattn` is off in the EVA configs).
-- The paper trains with 4 images per batch on 4 GPUs; here `SOLVER.IMS_PER_BATCH 1`, so `BASE_LR` is
-  square-root-scaled to 1e-4 (decided 2026-11-20). MAX_ITER 80000 is still the paper's (open, rule 4).
+- The paper trains with 4 images per batch on 4 GPUs; here `SOLVER.IMS_PER_BATCH 1` x `SOLVER.GRAD_ACCUM_STEPS 4`
+  under fp16 AMP = the paper's batch 4, `BASE_LR` 2e-4, MAX_ITER 80000 (decided 2026-11-22; batch 2+ does not
+  fit even with AMP). See `.claude/rules/ovss-decisions.md`.
 - Training/launching happens on the Linux box (`/home/viktor/...`, `/mnt/win-data/...`). This Mac
   is for editing; do not try to run training here.
 - Every in-training eval (COCO-Stuff val, 5000 images) and every final benchmark costs wall time;

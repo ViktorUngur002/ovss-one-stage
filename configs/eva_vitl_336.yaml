@@ -42,7 +42,11 @@ INPUT:
   FORMAT: "RGB"
   DATASET_MAPPER_NAME: "mask_former_semantic"
 SOLVER:
-  IMS_PER_BATCH: 2
+  # paper: batch 4 on 4 GPUs. Here 1 image per micro-batch x 4 accumulated = effective batch 4, under fp16 AMP
+  IMS_PER_BATCH: 1
+  GRAD_ACCUM_STEPS: 4
+  AMP:
+    ENABLED: True
   LR_SCHEDULER_NAME: WarmupCosineLR
   BASE_LR: 0.0002
   MAX_ITER: 80000
