@@ -28,13 +28,20 @@ closed questions or silently assume an undecided value.
   direction) and linear scaling to 5e-5 (stage 1's rule, derived for SGD, likely too conservative for
   AdamW at a fixed 80k iterations). CLIP q/v lr follows at x0.01 = 1e-6.
 
+- **2026-11-22** Run 3cb3861 (batch 1, lr 1e-4) finished: best = iteration 70000 (COCO-Stuff val 47.38);
+  fp16 sliding-window eval (`MyRuns-OVSS/evals/01_*`): ADE150 38.75, PC59 61.57 vs the authors' 40.59 / 63.79.
+  Next run (user's choice): `IMS_PER_BATCH` **2**, `BASE_LR` back to the paper's **2e-4** (unscaled; the sqrt
+  rule would give 1.41e-4). Two changes at once: twice the images seen at 80k iterations and a higher lr, so
+  the run cannot separate them. Batch 1 trained at 16.5 GB peak, so batch 2 may not fit in 20 GB.
+  Eval-only `TEST.AMP_DTYPE` ("" = fp32, "fp16", "bf16") added; training unaffected.
+
 ## Undecided (do not assume a value; propose one with reasoning when we get there)
 
 | Parameter | Upstream (paper, 4 GPUs) | Here now | Notes |
 |---|---|---|---|
-| Batch | 4 | 1 (`IMS_PER_BATCH`) | 20 GB; batch 2 untested |
-| MAX_ITER | 80000 | 80000 | at batch 1 = 1/4 of the paper's images seen |
-| CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 1e-6 with BASE_LR 1e-4 |
+| Batch | 4 | 2 (`IMS_PER_BATCH`) | 20 GB; batch 1 peaked at 16.5 GB |
+| MAX_ITER | 80000 | 80000 | at batch 2 = 1/2 of the paper's images seen |
+| CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 2e-6 with BASE_LR 2e-4 |
 | EVAL_PERIOD | 5000 | 5000 | 16 COCO-Stuff evals over 80k iters |
 | Final-eval weights | model_final | model_final | model_best is the alternative |
 | Our backbones (TN e1, TW e1) and placements A/B in CAT-Seg | — | — | needs qq mode + stage-1 reading code ported |

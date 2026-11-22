@@ -325,7 +325,9 @@ def main(args):
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
-        res = Trainer.test(cfg, model)
+        amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}.get(cfg.TEST.AMP_DTYPE)
+        with torch.autocast("cuda", dtype=amp_dtype or torch.float16, enabled=amp_dtype is not None):
+            res = Trainer.test(cfg, model)
         if cfg.TEST.AUG.ENABLED:
             res.update(Trainer.test_with_TTA(cfg, model))
         if comm.is_main_process():

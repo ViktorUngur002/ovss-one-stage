@@ -92,3 +92,5 @@ def add_cat_seg_config(cfg):
     cfg.MODEL.SEM_SEG_HEAD.CLIP_FINETUNE = "attention"
     cfg.MODEL.SEM_SEG_HEAD.CACHE_DIR = None
     cfg.TEST.SLIDING_WINDOW = False
+    # eval-only autocast: "" = fp32 as upstream, "fp16" or "bf16" (no TF32 on AMD, fp32 inference is slow)
+    cfg.TEST.AMP_DTYPE = ""
