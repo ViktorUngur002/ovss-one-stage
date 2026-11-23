@@ -5,12 +5,14 @@
 #   * backbone: the authors' released DeCLIP checkpoint DeCLIP_EVA-L_DINOv2-L_csa_0.05_2.0 (MODEL.SEM_SEG_HEAD.CACHE_DIR
 #     in configs/eva_vitl_336.yaml), dense features read in csa mode as in the upstream cat_seg_model.py.
 #   * data: train COCO-Stuff (171 classes), in-training eval on COCO-Stuff val every TEST.EVAL_PERIOD (5000 iters),
-#     the upstream defaults, run under fp16 autocast (TEST.AMP_DTYPE fp16 below; fp16 gave the same ADE150 mIoU as
-#     fp32 and is ~2.4x faster). The six OVSS benchmarks run after training: scripts/exp_final_eval.sh (fp32 by default).
-#   * single GPU, the paper's batch 4 exactly: SOLVER.IMS_PER_BATCH 1 x SOLVER.GRAD_ACCUM_STEPS 4 under fp16 AMP
-#     (SOLVER.AMP.ENABLED), paper's SOLVER.BASE_LR 2e-4, CLIP q/v lr x0.01 = 2e-6, MAX_ITER 80000 optimizer steps =
-#     320k images as in the paper. Batch 2 and 4 do not fit in 20 GB even with AMP (the CAT-Seg head's per-class
-#     activations); AMP batch 1 runs at 0.54 s per micro-batch (fp32: 1.64 s), so ~48 h of training.
+#     the upstream defaults, run under bf16 autocast (TEST.AMP_DTYPE bf16 below; fp16 risks the same decoder overflow
+#     as training). The six OVSS benchmarks run after training: scripts/exp_final_eval.sh (fp32 by default).
+#   * single GPU, the paper's batch 4: SOLVER.IMS_PER_BATCH 1 x SOLVER.GRAD_ACCUM_STEPS 4 under bf16 AMP
+#     (SOLVER.AMP.ENABLED, SOLVER.AMP.PRECISION bfloat16), paper's SOLVER.BASE_LR 2e-4, CLIP q/v lr x0.01 = 2e-6,
+#     MAX_ITER 80000 optimizer steps = 320k images as in the paper. Batch 2 and 4 do not fit in 20 GB even with AMP.
+#   * history: run aaf6fb0 (same recipe in fp16) hit a NaN loss at step 13331, fp16 overflow in the CAT-Seg decoder
+#     (decoder1 first conv ~1.8e4 at step 10k, fp16 max 65504). This run resumes from its model_0009999.pth (copied
+#     into this run's folder), so steps 0-10k were trained in fp16 and 10k-80k in bf16.
 #   * output: MyRuns-OVSS/<branch>/<commit8>_<slug>/ (set by run_experiment.py); relaunching resumes from the last
 #     periodic checkpoint there. Override any config value by appending KEY VALUE pairs to this script's arguments.
 #
@@ -30,5 +32,5 @@ HIP_VISIBLE_DEVICES=${HIP_VISIBLE_DEVICES:-0} python run_experiment.py \
 --config-file configs/eva_vitl_336.yaml \
 --num-gpus 1 \
 --dist-url auto \
-TEST.AMP_DTYPE fp16 \
+TEST.AMP_DTYPE bf16 \
 "$@"

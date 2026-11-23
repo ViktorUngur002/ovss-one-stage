@@ -46,6 +46,12 @@ closed questions or silently assume an undecided value.
   In-training evals under fp16 (`TEST.AMP_DTYPE` now applies to them too, set in the launch script); final
   benchmarks stay fp32 by default. Only difference from the authors' recipe: fp16 numerics. SDPA in the EVA
   backbone / swin window attention kept in reserve (might fit real batch 2, cannot fit batch 4).
+- **2026-11-23** Run aaf6fb0 (fp16 AMP, 1 x 4 accumulated): in-training COCO-Stuff val 45.72 @5k, 47.22 @10k
+  (3cb3861: 42.93 / 44.24), then **NaN loss at step 13331**: fp16 overflow in the CAT-Seg decoder (fp32 forward of
+  model_0009999 on 300 crops: `decoder1.conv.double_conv.0` max |out| 18,325, fp16 max 65504; everything else < 1,700;
+  DeCLIP's unscaled last-block q.q^T max 476, not the cause). Fix (user's choice): **bf16 AMP**
+  (`SOLVER.AMP.PRECISION bfloat16`, new key, default float16) and bf16 in-training evals; **resume from aaf6fb0's
+  model_0009999.pth** in the new run (steps 0-10k fp16, 10k-80k bf16). bf16 = 2.455 s/step (fp16 2.10 s), 14.2 GB.
 - **Known upstream quirk (not fixed):** `CATSegPredictor.get_text_embeds` caches the text embeddings at the first
   eval and reuses them in every later in-training eval although the text encoder keeps training, so in-training
   COCO-Stuff numbers after the first eval (and the model_best pick) use stale text features. Final benchmarks
@@ -55,9 +61,9 @@ closed questions or silently assume an undecided value.
 
 | Parameter | Upstream (paper, 4 GPUs) | Here now | Notes |
 |---|---|---|---|
-| Batch | 4 | 1 x 4 accumulated (AMP) | decided 2026-11-22; batch 2+ does not fit even with AMP |
+| Batch | 4 | 1 x 4 accumulated (bf16 AMP) | decided 2026-11-22; batch 2+ does not fit even with AMP |
 | MAX_ITER | 80000 | 80000 | optimizer steps; with accumulation = the paper's 320k images |
 | CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 2e-6 with BASE_LR 2e-4 |
-| EVAL_PERIOD | 5000 | 5000 | 16 COCO-Stuff evals; fp16 ~12 min each (fp32 28.5 min) |
+| EVAL_PERIOD | 5000 | 5000 | 16 COCO-Stuff evals; fp16 14.5 min each (fp32 28.5 min); bf16 from 2026-11-23 |
 | Final-eval weights | model_final | model_final | model_best is the alternative |
 | Our backbones (TN e1, TW e1) and placements A/B in CAT-Seg | — | — | needs qq mode + stage-1 reading code ported |

@@ -42,11 +42,13 @@ INPUT:
   FORMAT: "RGB"
   DATASET_MAPPER_NAME: "mask_former_semantic"
 SOLVER:
-  # paper: batch 4 on 4 GPUs. Here 1 image per micro-batch x 4 accumulated = effective batch 4, under fp16 AMP
+  # paper: batch 4 on 4 GPUs. Here 1 image per micro-batch x 4 accumulated = effective batch 4, under bf16 AMP
+  # (fp16 overflowed in the CAT-Seg decoder at step 13331 of aaf6fb0)
   IMS_PER_BATCH: 1
   GRAD_ACCUM_STEPS: 4
   AMP:
     ENABLED: True
+    PRECISION: "bfloat16"
   LR_SCHEDULER_NAME: WarmupCosineLR
   BASE_LR: 0.0002
   MAX_ITER: 80000

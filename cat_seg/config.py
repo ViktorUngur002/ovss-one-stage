@@ -98,3 +98,6 @@ def add_cat_seg_config(cfg):
     # micro-batches of IMS_PER_BATCH images whose gradients are summed before one optimizer step
     # (1 = upstream). Needs SOLVER.AMP.ENABLED; CAT-Seg has no BatchNorm, so this equals the larger batch.
     cfg.SOLVER.GRAD_ACCUM_STEPS = 1
+    # autocast dtype of AMP training, "float16" (detectron2's default) or "bfloat16". fp16 overflowed in the CAT-Seg
+    # decoder (decoder1 first conv reaches ~1.8e4 at step 10k, fp16 max 65504) -> NaN loss; bf16 has fp32's range.
+    cfg.SOLVER.AMP.PRECISION = "float16"

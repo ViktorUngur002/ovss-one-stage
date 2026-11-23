@@ -102,8 +102,8 @@ class GradAccumAMPTrainer(AMPTrainer):
     The GradScaler unscales before optimizer.step, so the full-model gradient clipping sees true gradients.
     """
 
-    def __init__(self, model, data_loader, optimizer, accum_steps):
-        super().__init__(model, data_loader, optimizer)
+    def __init__(self, model, data_loader, optimizer, accum_steps, precision=torch.float16):
+        super().__init__(model, data_loader, optimizer, precision=precision)
         self.accum_steps = accum_steps
 
     def run_step(self):
@@ -135,11 +135,14 @@ class Trainer(DefaultTrainer):
     def __init__(self, cfg):
         super().__init__(cfg)
         accum_steps = cfg.SOLVER.GRAD_ACCUM_STEPS
+        precision = {"float16": torch.float16, "bfloat16": torch.bfloat16}[cfg.SOLVER.AMP.PRECISION]
         if accum_steps > 1:
             assert cfg.SOLVER.AMP.ENABLED, "SOLVER.GRAD_ACCUM_STEPS > 1 is implemented for AMP training only"
             # replace the AMPTrainer DefaultTrainer built; its data loader iterator is created lazily, so nothing leaks
             t = self._trainer
-            self._trainer = GradAccumAMPTrainer(t.model, t.data_loader, t.optimizer, accum_steps)
+            self._trainer = GradAccumAMPTrainer(t.model, t.data_loader, t.optimizer, accum_steps, precision)
+        elif cfg.SOLVER.AMP.ENABLED:
+            self._trainer.precision = precision
 
     @classmethod
     def test(cls, cfg, model, evaluators=None):
