@@ -52,6 +52,16 @@ closed questions or silently assume an undecided value.
   DeCLIP's unscaled last-block q.q^T max 476, not the cause). Fix (user's choice): **bf16 AMP**
   (`SOLVER.AMP.PRECISION bfloat16`, new key, default float16) and bf16 in-training evals; **resume from aaf6fb0's
   model_0009999.pth** in the new run (steps 0-10k fp16, 10k-80k bf16). bf16 = 2.455 s/step (fp16 2.10 s), 14.2 GB.
+- **2026-11-24** Reproduction run d594d7e stopped at 55k by the user (resumable from `model_0054999.pth`). Its
+  `model_best` (50k, COCO-Stuff 49.18) gives **40.04 ADE150** in bf16 sliding-window eval (`MyRuns-OVSS/evals/03_*`),
+  authors 40.59. Accepted as close enough to move on; a TN run trained the full 80k is not step-matched to it.
+- **2026-11-24** Branch `TN_placementA_CATSeg_full_run`: CAT-Seg on stage-1 TN (dd067b2b) **epoch 6** (user's choice:
+  highest COCO maskpool, 63.4 with placement A; note its training-free ADE20K mIoU is 16.75 vs epoch 1's 18.64),
+  read with **placement A, block 8, tau 0.07**, qq mode. New keys `MODEL.SEM_SEG_HEAD.DENSE_MODE / EXIT_BLOCK /
+  EXIT_TAU` (defaults = upstream csa); config `configs/eva_vitl_336_tn_placementA.yaml` (use it for the final eval
+  too); weights `checkpoints/TN_dd067b2b_epoch6.pt` (state_dict of epoch_6.pt). No padding mask (CAT-Seg never pads
+  the CLIP input). Verified on the PC against stage-1 code: max |diff| 2e-6. Under placement A the last block's
+  `q_proj` gets no gradient. Recipe otherwise identical to d594d7e (bf16, 1 x 4, lr 2e-4, 80k).
 - **Known upstream quirk (not fixed):** `CATSegPredictor.get_text_embeds` caches the text embeddings at the first
   eval and reuses them in every later in-training eval although the text encoder keeps training, so in-training
   COCO-Stuff numbers after the first eval (and the model_best pick) use stale text features. Final benchmarks
@@ -66,4 +76,4 @@ closed questions or silently assume an undecided value.
 | CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 2e-6 with BASE_LR 2e-4 |
 | EVAL_PERIOD | 5000 | 5000 | 16 COCO-Stuff evals; fp16 14.5 min each (fp32 28.5 min); bf16 from 2026-11-23 |
 | Final-eval weights | model_final | model_final | model_best is the alternative |
-| Our backbones (TN e1, TW e1) and placements A/B in CAT-Seg | — | — | needs qq mode + stage-1 reading code ported |
+| Our backbones in CAT-Seg | — | TN e6 + placement A (tau 0.07) implemented | TW, placement B, tau 0.1 not ported/decided |

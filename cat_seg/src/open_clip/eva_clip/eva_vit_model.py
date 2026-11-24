@@ -254,7 +254,7 @@ class Attention(nn.Module):
 
         return x
     
-    def ss_attn(self, x, mode):
+    def ss_attn(self, x, mode, kernel=None):
         B, N, C = x.shape
         if self.subln: 
             q = F.linear(input=x, weight=self.q_proj.weight, bias=self.q_bias)
@@ -274,7 +274,10 @@ class Attention(nn.Module):
         q = q.contiguous().view(B*self.num_heads, N, -1)
         k = k.contiguous().view(B*self.num_heads, N, -1)
         v = v.contiguous().view(B*self.num_heads, N, -1)
-        if 'qq' in mode:
+        if kernel is not None:
+            # placement A: who listens to whom was decided by an earlier block, the same (B, N, N) table for all heads
+            attn_weights = kernel.to(v.dtype).repeat_interleave(self.num_heads, 0)
+        elif 'qq' in mode:
             q_attn = torch.bmm(q, q.transpose(1, 2))  #  self.scale
             attn_weights = F.softmax(q_attn, dim=-1)
         elif 'csa' in mode:
@@ -391,17 +394,17 @@ class Block(nn.Module):
                 x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         return x
     
-    def forward_without_rcffn(self, x, mode):
+    def forward_without_rcffn(self, x, mode, kernel=None):
         if self.gamma_1 is None:
             if self.postnorm:
-                x = self.drop_path(self.norm1(self.attn.ss_attn(x, mode)))
-            else:   
-                x = self.drop_path(self.attn.ss_attn(self.norm1(x),mode))
+                x = self.drop_path(self.norm1(self.attn.ss_attn(x, mode, kernel)))
+            else:
+                x = self.drop_path(self.attn.ss_attn(self.norm1(x), mode, kernel))
         else:
             if self.postnorm:
-                x = self.drop_path(self.gamma_1 * self.norm1(self.attn.ss_attn(x, mode)))
+                x = self.drop_path(self.gamma_1 * self.norm1(self.attn.ss_attn(x, mode, kernel)))
             else:
-                x = self.drop_path(self.gamma_1 * self.attn.ss_attn(self.norm1(x),mode))
+                x = self.drop_path(self.gamma_1 * self.attn.ss_attn(self.norm1(x), mode, kernel))
         return x
     
 
@@ -659,7 +662,19 @@ class EVAVisionTransformer(nn.Module):
         x = self.head(x)
         return x
 
-    def encode_dense(self, x, keep_shape=True, mode="qq"):
+    @torch.no_grad()
+    def _exit_kernel(self, tokens, tau):
+        """Placement A (stage 1's --exit-block): softmax(cos(g_i, g_j) / tau) over the patches, g = tokens (B, 1 + N, D)
+        after the exit block, CLS first. Returns (B, 1 + N, 1 + N); CLS keeps its own value. No gradient.
+        Unlike stage 1 there is no padding mask: CAT-Seg's CLIP input is never padded (384 crops, 640 windows)."""
+        with torch.autocast(device_type=tokens.device.type, enabled=False):
+            g = F.normalize(tokens[:, 1:].float(), dim=-1)                              # (B, N, D)
+            kernel = torch.eye(g.shape[1] + 1, device=g.device).repeat(len(g), 1, 1)
+            kernel[:, 1:, 1:] = (g @ g.transpose(1, 2) / tau).softmax(-1)
+        return kernel
+
+    def encode_dense(self, x, keep_shape=True, mode="qq", exit_block=0, exit_tau=0.07):
+        assert 0 <= exit_block < len(self.blocks), "exit_block must be a block before the last one"
         bs, _, h, w = x.shape
         h = h // self.patch_embed.patch_size[0]
         w = w // self.patch_embed.patch_size[1]
@@ -682,17 +697,20 @@ class EVAVisionTransformer(nn.Module):
             x = self.patch_dropout(x)
 
         rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
-        for blk in self.blocks[:-1]:
+        kernel = None
+        for i, blk in enumerate(self.blocks[:-1]):
             x = blk(x, rel_pos_bias=rel_pos_bias)
+            if i + 1 == exit_block:
+                kernel = self._exit_kernel(x, exit_tau)
         if "distill" in mode:
-            x, extra_feats = self.blocks[-1].forward_without_rcffn(x, mode)
+            x, extra_feats = self.blocks[-1].forward_without_rcffn(x, mode, kernel)
         else:
             if mode=="maskclip":
                 x = self.blocks[-1].forward_without_attn(x)
             elif mode=="vanilla" or mode=="sanity_check":
                 x = self.blocks[-1](x, rel_pos_bias=rel_pos_bias)
             else:
-                x = self.blocks[-1].forward_without_rcffn(x, mode)
+                x = self.blocks[-1].forward_without_rcffn(x, mode, kernel)
         x=x[:, 1:]
         x = self.norm(x)
         x = self.head(x)

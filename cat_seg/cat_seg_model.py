@@ -34,6 +34,9 @@ class CATSeg(nn.Module):
         clip_finetune: str,
         backbone_multiplier: float,
         clip_pretrained: str,
+        dense_mode: str = "csa",
+        exit_block: int = 0,
+        exit_tau: float = 0.07,
     ):
         """
         Args:
@@ -63,6 +66,7 @@ class CATSeg(nn.Module):
         self.layer_indexes = [3, 7] if clip_pretrained == "ViT-B/16" or clip_pretrained =="EVA02-CLIP-B-16" else [7, 15] 
         self.layers = []
         self.clip_name=clip_pretrained
+        self.dense_kwargs = dict(mode=dense_mode, exit_block=exit_block, exit_tau=exit_tau)
         self.frozen_backbone(clip_finetune)
         for l in self.layer_indexes:
             if 'eva' in self.clip_name.lower():
@@ -90,6 +94,9 @@ class CATSeg(nn.Module):
             "clip_finetune": cfg.MODEL.SEM_SEG_HEAD.CLIP_FINETUNE,
             "backbone_multiplier": cfg.SOLVER.BACKBONE_MULTIPLIER,
             "clip_pretrained": cfg.MODEL.SEM_SEG_HEAD.CLIP_PRETRAINED,
+            "dense_mode": cfg.MODEL.SEM_SEG_HEAD.DENSE_MODE,
+            "exit_block": cfg.MODEL.SEM_SEG_HEAD.EXIT_BLOCK,
+            "exit_tau": cfg.MODEL.SEM_SEG_HEAD.EXIT_TAU,
         }
 
     @property
@@ -131,7 +138,7 @@ class CATSeg(nn.Module):
            clip_features= self.sem_seg_head.predictor.clip_model.encode_dense(clip_images_resized,
                                                                                 normalize=True,
                                                                                 keep_shape=False,
-                                                                                mode='csa',) # bs, N, C
+                                                                                **self.dense_kwargs) # bs, N, C
            image_features=clip_features
         else:
             clip_features = self.sem_seg_head.predictor.clip_model.encode_image(clip_images_resized, dense=True)
@@ -187,7 +194,7 @@ class CATSeg(nn.Module):
            clip_features= self.sem_seg_head.predictor.clip_model.encode_dense(clip_images,
                                                                                 normalize=True,
                                                                                 keep_shape=False,
-                                                                                mode='csa',) # bs, N, C
+                                                                                **self.dense_kwargs) # bs, N, C
            image_features=clip_features
         else:
             clip_features = self.sem_seg_head.predictor.clip_model.encode_image(clip_images, dense=True)

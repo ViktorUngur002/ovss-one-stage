@@ -91,6 +91,13 @@ def add_cat_seg_config(cfg):
 
     cfg.MODEL.SEM_SEG_HEAD.CLIP_FINETUNE = "attention"
     cfg.MODEL.SEM_SEG_HEAD.CACHE_DIR = None
+    # EVA dense exit (cat_seg_model.py): attention of DeCLIP's decoupled last block, "csa" (authors' release) or
+    # "qq" (stage-1 checkpoints)
+    cfg.MODEL.SEM_SEG_HEAD.DENSE_MODE = "csa"
+    # placement A of stage 1: EXIT_BLOCK > 0 replaces the last block's attention by softmax(cos(g_i, g_j) / EXIT_TAU),
+    # g = patch tokens after that block, no gradient through it (0 = upstream)
+    cfg.MODEL.SEM_SEG_HEAD.EXIT_BLOCK = 0
+    cfg.MODEL.SEM_SEG_HEAD.EXIT_TAU = 0.07
     cfg.TEST.SLIDING_WINDOW = False
     # autocast for every evaluation (eval-only and in-training): "" = fp32 as upstream, "fp16" or "bf16"
     # (no TF32 on AMD, fp32 inference is slow; fp16 gave the same ADE150 mIoU as fp32)

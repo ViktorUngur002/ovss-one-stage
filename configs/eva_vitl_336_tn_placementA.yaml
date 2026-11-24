@@ -1,0 +1,12 @@
+# CAT-Seg on our stage-1 backbone TN (clip-JEPA-fine-tune dd067b2b, epoch 6 = best COCO maskpool), read with
+# placement A: the last block averages its values by softmax(cos(g_i, g_j) / 0.07), g = patch tokens after block 8,
+# instead of DeCLIP's csa attention. Everything else (head, solver, bf16, 1 x 4 accumulation) = eva_vitl_336.yaml.
+# Use this same file for training and for scripts/exp_final_eval.sh, or the eval reads the weights through csa.
+_BASE_: eva_vitl_336.yaml
+MODEL:
+  SEM_SEG_HEAD:
+    # state_dict of .../dd067b2b_*/checkpoints/epoch_6.pt (0.95 student + 0.05 original EVA02-CLIP-L)
+    CACHE_DIR: "/home/viktor/MasterDisertatie/checkpoints/TN_dd067b2b_epoch6.pt"
+    DENSE_MODE: "qq"
+    EXIT_BLOCK: 8
+    EXIT_TAU: 0.07
