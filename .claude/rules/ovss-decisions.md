@@ -62,6 +62,15 @@ closed questions or silently assume an undecided value.
   too); weights `checkpoints/TN_dd067b2b_epoch6.pt` (state_dict of epoch_6.pt). No padding mask (CAT-Seg never pads
   the CLIP input). Verified on the PC against stage-1 code: max |diff| 2e-6. Under placement A the last block's
   `q_proj` gets no gradient. Recipe otherwise identical to d594d7e (bf16, 1 x 4, lr 2e-4, 80k).
+- **2026-11-27** TN run a7baae2 finished: best = iteration 75000 (COCO-Stuff val 49.67; final 49.63). bf16
+  sliding-window eval of model_best (`MyRuns-OVSS/evals/04_*`): **ADE150 40.61** = the authors' 40.59. User: fine as is,
+  no fp32 re-eval.
+- **2026-11-27** Same branch, next run: CAT-Seg on stage-1 **TW** (9c652ffa) **epoch 1** (user's choice: best ADE20K mIoU
+  under A+B, 21.21; epoch 6 has the best maskpool, 61.35 A, but A+B mIoU 19.61), **placement A+B in training and eval**
+  (user's choice, recommended: the head trains on the features it is evaluated on): A = exit block 8, tau 0.07; B = new
+  keys `POST_BLOCK 8`, `POST_TAU 0.1`. B's kernel gets no gradient but its averaging does (stage 1 ran B eval-only under
+  no_grad). Config `configs/eva_vitl_336_tw_placementAB.yaml`, weights `checkpoints/TW_9c652ffa_epoch1.pt`. Verified on
+  the PC against stage-1 code: A 3e-6, A+B 6e-7 max |diff|. Recipe identical to a7baae2.
 - **Known upstream quirk (not fixed):** `CATSegPredictor.get_text_embeds` caches the text embeddings at the first
   eval and reuses them in every later in-training eval although the text encoder keeps training, so in-training
   COCO-Stuff numbers after the first eval (and the model_best pick) use stale text features. Final benchmarks
@@ -76,4 +85,4 @@ closed questions or silently assume an undecided value.
 | CLIP_MULTIPLIER | 0.01 | 0.01 | CLIP q/v LR = 2e-6 with BASE_LR 2e-4 |
 | EVAL_PERIOD | 5000 | 5000 | 16 COCO-Stuff evals; fp16 14.5 min each (fp32 28.5 min); bf16 from 2026-11-23 |
 | Final-eval weights | model_final | model_final | model_best is the alternative |
-| Our backbones in CAT-Seg | — | TN e6 + placement A (tau 0.07) implemented | TW, placement B, tau 0.1 not ported/decided |
+| Our backbones in CAT-Seg | — | TN e6 + A (40.61 ADE150); TW e1 + A+B running | TN without placement A (EXIT_BLOCK 0) ablation not decided |

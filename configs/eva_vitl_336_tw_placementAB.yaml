@@ -1,0 +1,16 @@
+# CAT-Seg on our stage-1 backbone TW (clip-JEPA-fine-tune 9c652ffa, epoch 1 = best ADE20K mIoU under A+B, 21.21),
+# read with placement A+B in training and evaluation: the last block averages its values by softmax(cos(g_i, g_j) / 0.07)
+# (A, how TW was trained), then each finished dense feature becomes the softmax(cos(g_i, g_j) / 0.1)-weighted mean of the
+# unit-length features (B); g = patch tokens after block 8 for both, no gradient through either table.
+# Everything else (head, solver, bf16, 1 x 4 accumulation) = eva_vitl_336.yaml.
+# Use this same file for training and for scripts/exp_final_eval.sh, or the eval reads the weights through csa.
+_BASE_: eva_vitl_336.yaml
+MODEL:
+  SEM_SEG_HEAD:
+    # state_dict of .../9c652ffa_*/checkpoints/epoch_1.pt (0.95 student + 0.05 original EVA02-CLIP-L)
+    CACHE_DIR: "/home/viktor/MasterDisertatie/checkpoints/TW_9c652ffa_epoch1.pt"
+    DENSE_MODE: "qq"
+    EXIT_BLOCK: 8
+    EXIT_TAU: 0.07
+    POST_BLOCK: 8
+    POST_TAU: 0.1

@@ -663,18 +663,32 @@ class EVAVisionTransformer(nn.Module):
         return x
 
     @torch.no_grad()
-    def _exit_kernel(self, tokens, tau):
-        """Placement A (stage 1's --exit-block): softmax(cos(g_i, g_j) / tau) over the patches, g = tokens (B, 1 + N, D)
-        after the exit block, CLS first. Returns (B, 1 + N, 1 + N); CLS keeps its own value. No gradient.
-        Unlike stage 1 there is no padding mask: CAT-Seg's CLIP input is never padded (384 crops, 640 windows)."""
+    def _block_kernel(self, tokens, tau):
+        """softmax(cos(g_i, g_j) / tau) over the patches, g = tokens (B, 1 + N, D) after an earlier block, CLS first.
+        Returns (B, N, N) in fp32. No gradient. Unlike stage 1 there is no padding mask: CAT-Seg's CLIP input is
+        never padded (384 crops, 640 windows)."""
         with torch.autocast(device_type=tokens.device.type, enabled=False):
             g = F.normalize(tokens[:, 1:].float(), dim=-1)                              # (B, N, D)
-            kernel = torch.eye(g.shape[1] + 1, device=g.device).repeat(len(g), 1, 1)
-            kernel[:, 1:, 1:] = (g @ g.transpose(1, 2) / tau).softmax(-1)
+            return (g @ g.transpose(1, 2) / tau).softmax(-1)
+
+    def _exit_kernel(self, tokens, tau):
+        """Placement A (stage 1's --exit-block): the block kernel with an identity row/column for CLS, (B, 1 + N, 1 + N)."""
+        patch_kernel = self._block_kernel(tokens, tau)
+        kernel = torch.eye(patch_kernel.shape[1] + 1, device=tokens.device).repeat(len(tokens), 1, 1)
+        kernel[:, 1:, 1:] = patch_kernel
         return kernel
 
-    def encode_dense(self, x, keep_shape=True, mode="qq", exit_block=0, exit_tau=0.07):
+    def _post_average(self, u, kernel):
+        """Placement B (stage 1's --post-block): each finished dense feature u (B, N, C) becomes the kernel-weighted mean
+        of the unit-length features. Stage 1 ran it eval-only under no_grad; here only the kernel is constant, so
+        CAT-Seg's loss still reaches CLIP through u."""
+        with torch.autocast(device_type=u.device.type, enabled=False):
+            out = kernel @ F.normalize(u.float(), dim=-1)
+        return out.to(u.dtype)
+
+    def encode_dense(self, x, keep_shape=True, mode="qq", exit_block=0, exit_tau=0.07, post_block=0, post_tau=0.1):
         assert 0 <= exit_block < len(self.blocks), "exit_block must be a block before the last one"
+        assert 0 <= post_block < len(self.blocks), "post_block must be a block before the last one"
         bs, _, h, w = x.shape
         h = h // self.patch_embed.patch_size[0]
         w = w // self.patch_embed.patch_size[1]
@@ -697,11 +711,13 @@ class EVAVisionTransformer(nn.Module):
             x = self.patch_dropout(x)
 
         rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
-        kernel = None
+        kernel, post_kernel = None, None
         for i, blk in enumerate(self.blocks[:-1]):
             x = blk(x, rel_pos_bias=rel_pos_bias)
             if i + 1 == exit_block:
                 kernel = self._exit_kernel(x, exit_tau)
+            if i + 1 == post_block:
+                post_kernel = self._block_kernel(x, post_tau)
         if "distill" in mode:
             x, extra_feats = self.blocks[-1].forward_without_rcffn(x, mode, kernel)
         else:
@@ -715,6 +731,8 @@ class EVAVisionTransformer(nn.Module):
         x = self.norm(x)
         x = self.head(x)
         assert self.fc_norm is None
+        if post_kernel is not None:
+            x = self._post_average(x, post_kernel)
         if keep_shape:
             x = x.view(bs, h, w, -1).permute(0, 3, 1, 2)
         if "distill" in mode:

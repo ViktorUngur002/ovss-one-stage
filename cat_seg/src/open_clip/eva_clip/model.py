@@ -323,10 +323,12 @@ class CustomCLIP(nn.Module):
         text_features = self.encode_text(text, normalize=True)
         return image_features, text_features, self.logit_scale.exp()
 
-    def encode_dense(self, image, normalize: bool = False, keep_shape=False, mode="only_v", exit_block=0, exit_tau=0.07):
+    def encode_dense(self, image, normalize: bool = False, keep_shape=False, mode="only_v", exit_block=0, exit_tau=0.07,
+                     post_block=0, post_tau=0.1):
         if 'distill' in mode or mode=="sanity_check":
             features,extra_features = self.visual.encode_dense(image, keep_shape=keep_shape,mode=mode,
-                                                               exit_block=exit_block, exit_tau=exit_tau)
+                                                               exit_block=exit_block, exit_tau=exit_tau,
+                                                               post_block=post_block, post_tau=post_tau)
             if normalize:
                 if keep_shape:
                     features = F.normalize(features, dim=1)
@@ -335,7 +337,8 @@ class CustomCLIP(nn.Module):
             return features, extra_features
         else:
             features = self.visual.encode_dense(image, keep_shape=keep_shape,mode=mode,
-                                                exit_block=exit_block, exit_tau=exit_tau)
+                                                exit_block=exit_block, exit_tau=exit_tau,
+                                                post_block=post_block, post_tau=post_tau)
             if normalize:
                 if keep_shape:
                     features = F.normalize(features, dim=1)

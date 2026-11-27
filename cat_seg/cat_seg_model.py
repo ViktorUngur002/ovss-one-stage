@@ -37,6 +37,8 @@ class CATSeg(nn.Module):
         dense_mode: str = "csa",
         exit_block: int = 0,
         exit_tau: float = 0.07,
+        post_block: int = 0,
+        post_tau: float = 0.1,
     ):
         """
         Args:
@@ -66,7 +68,8 @@ class CATSeg(nn.Module):
         self.layer_indexes = [3, 7] if clip_pretrained == "ViT-B/16" or clip_pretrained =="EVA02-CLIP-B-16" else [7, 15] 
         self.layers = []
         self.clip_name=clip_pretrained
-        self.dense_kwargs = dict(mode=dense_mode, exit_block=exit_block, exit_tau=exit_tau)
+        self.dense_kwargs = dict(mode=dense_mode, exit_block=exit_block, exit_tau=exit_tau,
+                                 post_block=post_block, post_tau=post_tau)
         self.frozen_backbone(clip_finetune)
         for l in self.layer_indexes:
             if 'eva' in self.clip_name.lower():
@@ -97,6 +100,8 @@ class CATSeg(nn.Module):
             "dense_mode": cfg.MODEL.SEM_SEG_HEAD.DENSE_MODE,
             "exit_block": cfg.MODEL.SEM_SEG_HEAD.EXIT_BLOCK,
             "exit_tau": cfg.MODEL.SEM_SEG_HEAD.EXIT_TAU,
+            "post_block": cfg.MODEL.SEM_SEG_HEAD.POST_BLOCK,
+            "post_tau": cfg.MODEL.SEM_SEG_HEAD.POST_TAU,
         }
 
     @property

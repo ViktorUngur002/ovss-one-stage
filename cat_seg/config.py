@@ -98,6 +98,10 @@ def add_cat_seg_config(cfg):
     # g = patch tokens after that block, no gradient through it (0 = upstream)
     cfg.MODEL.SEM_SEG_HEAD.EXIT_BLOCK = 0
     cfg.MODEL.SEM_SEG_HEAD.EXIT_TAU = 0.07
+    # placement B of stage 1: POST_BLOCK > 0 replaces each finished dense feature by the softmax(cos(g_i, g_j) / POST_TAU)
+    # weighted mean of the unit-length features, g = patch tokens after that block; the weights get no gradient (0 = upstream)
+    cfg.MODEL.SEM_SEG_HEAD.POST_BLOCK = 0
+    cfg.MODEL.SEM_SEG_HEAD.POST_TAU = 0.1
     cfg.TEST.SLIDING_WINDOW = False
     # autocast for every evaluation (eval-only and in-training): "" = fp32 as upstream, "fp16" or "bf16"
     # (no TF32 on AMD, fp32 inference is slow; fp16 gave the same ADE150 mIoU as fp32)
